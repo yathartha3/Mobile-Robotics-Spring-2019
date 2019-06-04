@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+
+  <include file="$(find mapping)/launch/gmapping_turtlebot.launch">
+  </include>
+
+  <node pkg="mapping" type="explore_gmapping.py" name="explore_node"/>
+  
+</launch>
+

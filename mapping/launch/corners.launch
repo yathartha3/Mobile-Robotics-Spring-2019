@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="world_file" value=" $(find mapping)/maps/stage/maze.world"/>
+  <arg name="map_file"  value="$(find mapping)/maps/maze.yaml"/>
+  <include file="$(find mapping)/launch/turtlebot_in_stage.launch">
+     <arg name="world_file" value="$(arg world_file)"/>
+     <arg name="map_file"  value="$(arg map_file)"/>
+  </include>
+  
+  <node pkg="mapping" name="corner_node" type="corners.py"  output="screen">
+      <param name="waypoints_filepath" value="$(find mapping)/waypoints/corners.csv"/>
+  </node>
+
+  <!--  **************** Visualisation ****************  -->
+  <!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find mapping)/rviz/navigation.rviz"/>-->
+
+</launch>
+

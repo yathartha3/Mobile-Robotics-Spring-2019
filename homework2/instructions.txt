@@ -1,0 +1,5 @@
+#1 Copy the repo to your workspace, e.g., catkin_ws/src
+#2 Open a new terminal and run
+roslaunch homework2 mcl.launch
+
+#3 Use turtlebot_teleop keyboard_teleop.launch, to drive the robot around
