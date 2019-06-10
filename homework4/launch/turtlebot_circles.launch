@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="world_file" value=" $(find homework4)/maps/stage/circles_highres.world"/>
+  <arg name="map_file"  value="$(find homework4)/maps/circles_highres.yaml"/>
+  <include file="$(find homework4)/launch/turtlebot_in_stage.launch">
+     <arg name="world_file" value="$(arg world_file)"/>
+     <arg name="map_file"  value="$(arg map_file)"/>
+  </include>
+
+  <node pkg="homework4" name="explore_find_circles_node" type="explore_and_find_circles.py"  output="screen">
+      <param name="waypoints_filepath" value="$(find homework4)/waypoints/patrol.csv"/>
+  </node>
+
+</launch>
