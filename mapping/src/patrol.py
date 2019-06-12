@@ -31,7 +31,7 @@ class MoveBaseWaypoints():
         self.movebase_client()
 
     def odometry_callback(self, msg):  # call only once
-        if start_flag:
+        if self.start_flag:
             self.start_x = msg.pose.pose.position.x
             self.start_y = msg.pose.pose.position.y
             start_flag = False
@@ -44,7 +44,7 @@ class MoveBaseWaypoints():
     def read_waypoints_from_csv(self,filename):
         # Import waypoints.csv into a list (path_points)
         poses_waypoints = []
-
+        #filename = "/home/parallels/catkin_ws/src/mapping/waypoints/patrol.csv"
         with open(filename) as f:
             path_points = [tuple(line) for line in csv.reader(f, delimiter=' ')]
         path_points = [(float(point[0]), float(point[1]), float(point[2])) for point in path_points]
