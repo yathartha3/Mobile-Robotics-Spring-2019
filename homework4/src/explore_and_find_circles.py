@@ -8,7 +8,6 @@ from tf.transformations import quaternion_from_euler
 import csv
 
 import matplotlib.pyplot as plt
-
 from skimage import data, color
 from skimage.transform import hough_circle, hough_circle_peaks
 from skimage.feature import canny
@@ -74,12 +73,12 @@ class MoveBaseWaypoints():
             self.laser_initialized = True
         self.laser_data = msg
 
-##### DEBUGGING
-        #self.detect_shape()
-
     def heading(self, yaw):
         q = quaternion_from_euler(0, 0, yaw)
         return Quaternion(*q)
+
+    def distance(self, p1, p2):
+        return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
     def read_waypoints_from_csv(self, filename):
         # Import waypoints.csv into a list (path_points)
@@ -94,31 +93,16 @@ class MoveBaseWaypoints():
             poses_waypoints.append(waypoint)
         return poses_waypoints
 
-    ### Shape detection and processing functions
-
     def laser_to_image(self, odom_msg, laser_msg):
         """ Convert 1-D laser data to 2-D image data so that Hough Transform Filter can be applied to it"""
         robot_x = odom_msg.pose.pose.position.x
         robot_y = odom_msg.pose.pose.position.y
-
-        self.robot_x = robot_x
-        self.robot_y = robot_y
 
         quaternion = np.array([odom_msg.pose.pose.orientation.x,
                               odom_msg.pose.pose.orientation.y,
                               odom_msg.pose.pose.orientation.z,
                               odom_msg.pose.pose.orientation.w])
         _, _, robot_theta = tr.euler_from_quaternion(quaternion)
-
-        #robot_x_pixel = int(robot_x/self.grid_size)
-        #robot_y_pixel = int(robot_y/self.grid_size)
-
-        # # Bound it between [200,200], the map size in pixels
-        # robot_x_pixel = max(0, min(999, robot_x_pixel))
-        # robot_y_pixel = max(0, min(999, robot_y_pixel))
-
-        max_x = 0
-        max_y = 0
 
         occupied_pixel_list_xy = []
 
@@ -148,10 +132,7 @@ class MoveBaseWaypoints():
 
             occupied_pixel_list_xy = occupied_pixel_list_xy + [(pixel_occupied_x, pixel_occupied_y)]
 
-            if pixel_occupied_x > max_x: max_x = pixel_occupied_x
-            if pixel_occupied_y > max_y: max_y = pixel_occupied_y
-
-        # Create blank image of reduced size
+        # Create blank image of the map
         image = np.zeros([1000, 1000])
 
         # Populate the occupied pixels
@@ -167,12 +148,10 @@ class MoveBaseWaypoints():
             center_y = center_y * self.grid_size
 
             # NOTE: center_x contains all x's, and center_y contains all y's. Need to arrage to get point (x,y)
-
-            for n in range(len(center_x)):
-                self.circle_locations.append([center_x[n], center_y[n]])
+            # for n in range(len(center_x)):
+            #     self.circle_locations.append([center_x[n], center_y[n]])
 
             self.publish_all_circles(copy.deepcopy(self.circle_locations))
-
 
     def publish_all_circles(self, circles_location):
         marker_array = MarkerArray()
@@ -202,6 +181,19 @@ class MoveBaseWaypoints():
         msg.scale.z = 0.1
         return msg
 
+    def check_circle_duplicate(self, test_circle):
+        if len(self.circle_locations) == 0:
+            return False
+        for existing_circle in self.circle_locations:
+            if self.distance(test_circle, existing_circle) < 0.5:
+                return True
+        return False
+
+    def pixel_to_metric(self, x, y):
+        x_m = x * self.grid_size + 0  # Zero map offset
+        y_m = y * self.grid_size + 0
+        return x_m, y_m
+
     def hough_filter(self, image):
         image = image.astype(np.uint8)
         kernel = np.ones((3, 3), np.float32) / 4
@@ -213,6 +205,12 @@ class MoveBaseWaypoints():
             circles = np.uint16(np.around(circles))
             for circle in circles[0, :]:
                 center = (circle[0], circle[1])
+
+                test_circle = self.pixel_to_metric(circle[0],circle[1])
+                if not self.check_circle_duplicate(test_circle):
+                    self.circle_locations.append(test_circle)
+
+                # circle center
                 cv.circle(image, center, 1, (0, 100, 100), 3)
                 # circle outline
                 radius = circle[2]
@@ -234,8 +232,7 @@ class MoveBaseWaypoints():
         # Convert to 2D, and pass it through filter
         # First convert all laser points to world coordinates, and then to pixels
 
-    ### Action Client Callbacks
-
+    # Action Client Callbacks
     def active_cb(self):
         rospy.loginfo("Goal pose " + str(self.goal_cnt + 1) + " is now being processed by the Action Server...")
 
@@ -266,7 +263,7 @@ class MoveBaseWaypoints():
             rospy.loginfo("Goal pose " + str(self.goal_cnt + 1) + " reached")
             self.goal_cnt += 1
 
-            self.detect_shape()
+            #self.detect_shape()
 
             if self.goal_cnt < len(self.waypoints):
                 rospy.sleep(2.0)
