@@ -6,8 +6,6 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from geometry_msgs.msg import Pose, Point, Quaternion
 from tf.transformations import quaternion_from_euler
 import csv
-
-
 import tf.transformations as tr
 from std_msgs.msg import ColorRGBA
 from nav_msgs.msg import Odometry
@@ -21,7 +19,6 @@ import cv2 as cv
 
 
 """Some code adapted from https://hotblackrobotics.github.io/en/blog/2018/01/29/seq-goals-py/"""
-"""This code is also part of our project."""
 
 
 class MoveBaseWaypoints():
@@ -34,6 +31,7 @@ class MoveBaseWaypoints():
         self.waypoints = self.read_waypoints_from_csv(filename)
 
         self.circles_pub = rospy.Publisher('/detected_circles', MarkerArray, queue_size=1)
+        self.text_pub = rospy.Publisher('/num_circles', Marker, queue_size=1)
 
         rospy.Timer(rospy.Duration(1), self.timer_callback)
 
@@ -54,11 +52,10 @@ class MoveBaseWaypoints():
         print(self.failed_goal_index)
         print("Initialized")
 
-        #self.movebase_client()
-
     def timer_callback(self, event):
-        print("timer called")
+        #print("timer called")
         self.detect_shape()
+        self.publish_text_marker()
 
     def odometry_callback(self, msg):  # call only once
         self.robot_odom = msg
@@ -171,7 +168,6 @@ class MoveBaseWaypoints():
         msg.id = marker_id
         msg.type = 3
         msg.action = 0
-        #msg.lifetime = rospy.Duration(1)
 
         msg.color = ColorRGBA(0, 1.0, 0, 1.0)
         msg.pose.position = Point(circle[1], circle[0], 0.2)  # NOTE: Reversed
@@ -181,24 +177,27 @@ class MoveBaseWaypoints():
         msg.scale.z = 0.1
         return msg
 
-    def get_rviz_cylinder_marker(self, timestamp, circle, marker_id):
-        """Returns an rviz marker that visualizes a single particle"""
+    def get_rviz_text_marker(self):
+        """Returns an rviz marker that visualizes a text"""
         msg = Marker()
-        msg.header.stamp = timestamp
+        msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = 'map'
-        msg.ns = 'circles'
-        msg.id = marker_id
-        msg.type = 3
+        msg.ns = 'text'
+        msg.id = 1000 # just sth random
+        msg.type = 9
         msg.action = 0
-        #msg.lifetime = rospy.Duration(1)
+        msg.text = "# Circles: " + str(len(self.circle_locations))
 
-        msg.color = ColorRGBA(0, 1.0, 0, 1.0)
-        msg.pose.position = Point(circle[1], circle[0], 0.2)  # NOTE: Reversed
+        msg.pose.position = Point(1, 1, 0.2)
+        msg.pose.orientation.w = 1.0
+        msg.color = ColorRGBA(1.0, 0.0, 0, 1.0)
 
-        msg.scale.x = 0.25  # 50 cm diameter circles
-        msg.scale.y = 0.25
-        msg.scale.z = 0.1
+        msg.scale.z = 0.5
         return msg
+
+    def publish_text_marker(self):
+        marker = self.get_rviz_text_marker()
+        self.text_pub.publish(marker)
 
     def check_circle_duplicate(self, test_circle):
         if len(self.circle_locations) == 0:
@@ -218,7 +217,7 @@ class MoveBaseWaypoints():
         kernel = np.ones((3, 3), np.float32) / 4
         image = cv.filter2D(image, -1, kernel)
         circles = cv.HoughCircles(image, cv.HOUGH_GRADIENT, 1, 10,
-                                  param1=10, param2=8,
+                                  param1=10, param2=10,
                                   minRadius=23, maxRadius=27)
         if circles is not None:
             circles = np.uint16(np.around(circles))
@@ -229,12 +228,12 @@ class MoveBaseWaypoints():
                 if not self.check_circle_duplicate(test_circle):
                     self.circle_locations.append(test_circle)
 
-                # circle center
-                cv.circle(image, center, 1, (0, 100, 100), 3)
-                # circle outline
-                radius = circle[2]
-                #print "radius=", radius
-                cv.circle(image, center, radius, (255, 0, 255), 3)
+                # # circle center
+                # cv.circle(image, center, 1, (0, 100, 100), 3)
+                # # circle outline
+                # radius = circle[2]
+                # #print "radius=", radius
+                # cv.circle(image, center, radius, (255, 0, 255), 3)
 
             #cv.imshow("detected circles", image)
 
@@ -349,7 +348,6 @@ if __name__ == '__main__':
     rospy.sleep(2)
 
     while not rospy.is_shutdown():
-        #circle_detector.detect_shape()
         print("running")
         circle_detector.movebase_client()
         rate.sleep()
