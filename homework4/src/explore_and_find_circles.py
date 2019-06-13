@@ -7,13 +7,6 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 from tf.transformations import quaternion_from_euler
 import csv
 
-import matplotlib.pyplot as plt
-from skimage import data, color
-from skimage.transform import hough_circle, hough_circle_peaks
-from skimage.feature import canny
-from skimage.draw import circle_perimeter
-from skimage.util import img_as_ubyte
-from skimage.io import imread, imshow
 
 import tf.transformations as tr
 from std_msgs.msg import ColorRGBA
@@ -40,10 +33,9 @@ class MoveBaseWaypoints():
         filename = rospy.get_param('~waypoints_filepath', '')
         self.waypoints = self.read_waypoints_from_csv(filename)
 
-        rospy.Subscriber('/base_pose_ground_truth', Odometry, self.odometry_callback, queue_size=1)
-        rospy.Subscriber('/scan', LaserScan, self.laser_callback, queue_size=1)
-
         self.circles_pub = rospy.Publisher('/detected_circles', MarkerArray, queue_size=1)
+
+        rospy.Timer(rospy.Duration(1), self.timer_callback)
 
         self.laser_data = None
         self.robot_odom = None
@@ -55,10 +47,18 @@ class MoveBaseWaypoints():
 
         self.failed_goal_index = []
         self.debug = False
+
+        rospy.Subscriber('/base_pose_ground_truth', Odometry, self.odometry_callback, queue_size=1)
+        rospy.Subscriber('/scan', LaserScan, self.laser_callback, queue_size=1)
+
         print(self.failed_goal_index)
         print("Initialized")
 
         #self.movebase_client()
+
+    def timer_callback(self, event):
+        print("timer called")
+        self.detect_shape()
 
     def odometry_callback(self, msg):  # call only once
         self.robot_odom = msg
@@ -87,7 +87,7 @@ class MoveBaseWaypoints():
         with open(filename) as f:
             path_points = [tuple(line) for line in csv.reader(f, delimiter=' ')]
         path_points = [(float(point[0]), float(point[1]), float(point[2])) for point in path_points]
-        print path_points
+        #print path_points
         for point in path_points:
             waypoint = Pose(Point(float(point[0]), float(point[1]), 0), self.heading(float(point[2])))
             poses_waypoints.append(waypoint)
@@ -181,6 +181,25 @@ class MoveBaseWaypoints():
         msg.scale.z = 0.1
         return msg
 
+    def get_rviz_cylinder_marker(self, timestamp, circle, marker_id):
+        """Returns an rviz marker that visualizes a single particle"""
+        msg = Marker()
+        msg.header.stamp = timestamp
+        msg.header.frame_id = 'map'
+        msg.ns = 'circles'
+        msg.id = marker_id
+        msg.type = 3
+        msg.action = 0
+        #msg.lifetime = rospy.Duration(1)
+
+        msg.color = ColorRGBA(0, 1.0, 0, 1.0)
+        msg.pose.position = Point(circle[1], circle[0], 0.2)  # NOTE: Reversed
+
+        msg.scale.x = 0.25  # 50 cm diameter circles
+        msg.scale.y = 0.25
+        msg.scale.z = 0.1
+        return msg
+
     def check_circle_duplicate(self, test_circle):
         if len(self.circle_locations) == 0:
             return False
@@ -214,10 +233,10 @@ class MoveBaseWaypoints():
                 cv.circle(image, center, 1, (0, 100, 100), 3)
                 # circle outline
                 radius = circle[2]
-                print "radius=", radius
+                #print "radius=", radius
                 cv.circle(image, center, radius, (255, 0, 255), 3)
 
-            cv.imshow("detected circles", image)
+            #cv.imshow("detected circles", image)
 
             return circles[0][:,0], circles[0][:,1]  # all x's, and all y's
         return [], []  # If nothing is found
@@ -228,7 +247,7 @@ class MoveBaseWaypoints():
 
         laser_image = self.laser_to_image(odom_data, laser_data)
 
-        print("Detecting shape")
+        #print("Detecting shape")
         # Convert to 2D, and pass it through filter
         # First convert all laser points to world coordinates, and then to pixels
 
@@ -330,6 +349,7 @@ if __name__ == '__main__':
     rospy.sleep(2)
 
     while not rospy.is_shutdown():
-        circle_detector.detect_shape()
-        print("ran detection")
+        #circle_detector.detect_shape()
+        print("running")
+        circle_detector.movebase_client()
         rate.sleep()
